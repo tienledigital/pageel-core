@@ -138,7 +138,8 @@ export function createCollection(
   id: string,
   name: string,
   postsPath: string,
-  imagesPath: string
+  imagesPath: string,
+  template?: CollectionTemplate
 ): Collection {
   const now = new Date().toISOString();
   return {
@@ -146,6 +147,7 @@ export function createCollection(
     name,
     postsPath,
     imagesPath,
+    template,
     createdAt: now,
     updatedAt: now,
   };

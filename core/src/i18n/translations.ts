@@ -117,6 +117,11 @@ export const translations = {
         selectFromTree: "Please select a directory from the explorer on the left.",
         domainHelp: 'This is required to preview images correctly. We tried to auto-detect it for you.',
       },
+      success: {
+        collectionCreated: 'Collection created successfully!',
+        collectionUpdated: 'Collection updated successfully!',
+        collectionDeleted: 'Collection deleted successfully!',
+      },
       settings: {
         title: 'Application Settings',
         subtitle: 'Configure your project, workflow, and system preferences.',
@@ -532,6 +537,25 @@ export const translations = {
     languageSwitcher: {
       modalTitle: 'Select Language',
     },
+    collectionModal: {
+      newTitle: 'New Collection',
+      editTitle: 'Edit Collection',
+      nameLabel: 'Collection Name',
+      namePlaceholder: 'e.g., Blog, Projects, Docs',
+      postsPathLabel: 'Posts Directory',
+      postsPathPlaceholder: 'e.g., src/content/blog',
+      imagesPathLabel: 'Images Directory',
+      imagesPathPlaceholder: 'e.g., public/images/blog',
+      cancel: 'Cancel',
+      saveButton: 'Save Changes',
+      createButton: 'Create Collection',
+      error: {
+        nameRequired: 'Collection name is required',
+        postsPathRequired: 'Posts directory is required',
+        imagesPathRequired: 'Images directory is required',
+        duplicateName: 'A collection with this name already exists',
+      }
+    }
   },
   vi: {
     app: {
@@ -649,6 +673,11 @@ export const translations = {
         noImageSuggestions: 'Không thể tự động tìm thấy thư mục hình ảnh. Bạn có thể đặt sau trong Cài đặt.',
         selectFromTree: 'Vui lòng chọn một thư mục từ trình khám phá bên trái.',
         domainHelp: 'Điều này là bắt buộc để xem trước hình ảnh. Chúng tôi đã cố gắng tự động phát hiện nó cho bạn.',
+      },
+      success: {
+        collectionCreated: 'Đã tạo bộ sưu tập thành công!',
+        collectionUpdated: 'Đã cập nhật bộ sưu tập thành công!',
+        collectionDeleted: 'Đã xóa bộ sưu tập thành công!',
       },
       settings: {
         title: 'Cài đặt Ứng dụng',
@@ -1063,7 +1092,26 @@ export const translations = {
       vi: 'Tiếng Việt',
     },
     languageSwitcher: {
-      modalTitle: 'Chọn Ngôn ngữ',
+      modalTitle: 'Chọn ngôn ngữ',
     },
+    collectionModal: {
+      newTitle: 'Bộ sưu tập mới',
+      editTitle: 'Chỉnh sửa bộ sưu tập',
+      nameLabel: 'Tên bộ sưu tập',
+      namePlaceholder: 'VD: Blog, Dự án, Tài liệu',
+      postsPathLabel: 'Thư mục bài viết',
+      postsPathPlaceholder: 'VD: src/content/blog',
+      imagesPathLabel: 'Thư mục hình ảnh',
+      imagesPathPlaceholder: 'VD: public/images/blog',
+      cancel: 'Hủy',
+      saveButton: 'Lưu thay đổi',
+      createButton: 'Tạo bộ sưu tập',
+      error: {
+        nameRequired: 'Tên bộ sưu tập là bắt buộc',
+        postsPathRequired: 'Thư mục bài viết là bắt buộc',
+        imagesPathRequired: 'Thư mục hình ảnh là bắt buộc',
+        duplicateName: 'Bộ sưu tập với tên này đã tồn tại',
+      }
+    }
   }
 };

@@ -107,6 +107,10 @@ export const useCollectionStore = create<CollectionStore>()(
       addCollection: (collection) => {
         set((state) => {
           if (!state.workspace) return state;
+          // Prevent duplicates - check if collection with same ID exists
+          if (state.workspace.collections.some(c => c.id === collection.id)) {
+            return state;
+          }
           return {
             workspace: {
               ...state.workspace,

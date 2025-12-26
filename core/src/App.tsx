@@ -30,11 +30,11 @@ const App: React.FC = () => {
   const { t } = useI18n();
 
   const performSimpleLogout = useCallback(() => {
-    sessionStorage.removeItem('github_pat_encrypted');
-    sessionStorage.removeItem('crypto_key');
-    sessionStorage.removeItem('selected_repo');
-    sessionStorage.removeItem('service_type');
-    sessionStorage.removeItem('instance_url');
+    localStorage.removeItem('github_pat_encrypted');
+    localStorage.removeItem('crypto_key');
+    localStorage.removeItem('selected_repo');
+    localStorage.removeItem('service_type');
+    localStorage.removeItem('instance_url');
     setGithubToken(null);
     setUser(null);
     setSelectedRepo(null);
@@ -80,11 +80,11 @@ const App: React.FC = () => {
   }, [selectedRepo, shouldResetOnLogout, performSimpleLogout]);
 
   useEffect(() => {
-    const encryptedToken = sessionStorage.getItem('github_pat_encrypted');
-    const keyJson = sessionStorage.getItem('crypto_key');
-    const repoJson = sessionStorage.getItem('selected_repo');
-    const serviceTypeFromSession = sessionStorage.getItem('service_type') as ServiceType | null;
-    const instanceUrl = sessionStorage.getItem('instance_url');
+    const encryptedToken = localStorage.getItem('github_pat_encrypted');
+    const keyJson = localStorage.getItem('crypto_key');
+    const repoJson = localStorage.getItem('selected_repo');
+    const serviceTypeFromSession = localStorage.getItem('service_type') as ServiceType | null;
+    const instanceUrl = localStorage.getItem('instance_url');
 
     if (encryptedToken && keyJson && repoJson && serviceTypeFromSession) {
       const restoreSession = async () => {
@@ -191,11 +191,11 @@ const App: React.FC = () => {
       const encryptedToken = await encryptData(token, key);
       const exportedKey = await exportCryptoKey(key);
 
-      sessionStorage.setItem('github_pat_encrypted', encryptedToken);
-      sessionStorage.setItem('crypto_key', JSON.stringify(exportedKey));
-      sessionStorage.setItem('selected_repo', JSON.stringify(repoData));
-      sessionStorage.setItem('service_type', serviceType);
-      if (instanceUrl) sessionStorage.setItem('instance_url', instanceUrl);
+      localStorage.setItem('github_pat_encrypted', encryptedToken);
+      localStorage.setItem('crypto_key', JSON.stringify(exportedKey));
+      localStorage.setItem('selected_repo', JSON.stringify(repoData));
+      localStorage.setItem('service_type', serviceType);
+      if (instanceUrl) localStorage.setItem('instance_url', instanceUrl);
 
       setUser(userData);
       setGithubToken(token);

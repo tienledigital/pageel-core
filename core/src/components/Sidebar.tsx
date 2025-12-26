@@ -11,6 +11,8 @@ import { LogoutIcon } from './icons/LogoutIcon';
 import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
 import { SyncStatusBadge } from './SyncStatusBadge';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
+import { CollectionPicker } from './CollectionPicker';
+import { Collection } from '../features/collections';
 
 interface SidebarProps {
     activeView: string;
@@ -23,9 +25,25 @@ interface SidebarProps {
     isSynced: boolean;
     repoStats: { postCount: number | null, imageCount: number | null };
     lastUpdated: string;
+    onNewCollection?: () => void;
+    onEditCollection?: (collection: Collection) => void;
+    onDeleteCollection?: (collection: Collection) => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeView, onNavClick, navLinks, user, serviceType, onLogout, isSynced, repoStats, lastUpdated }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ 
+    activeView, 
+    onNavClick, 
+    navLinks, 
+    user, 
+    serviceType, 
+    onLogout, 
+    isSynced, 
+    repoStats, 
+    lastUpdated, 
+    onNewCollection,
+    onEditCollection,
+    onDeleteCollection
+}) => {
     const { t } = useI18n();
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -89,6 +107,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onNavClick, navLin
 
             {/* Navigation */}
             <nav className="flex-grow px-2 space-y-0.5 overflow-y-auto">
+                {/* Collection Picker */}
+                <div className="relative">
+                    <CollectionPicker 
+                        onNewCollection={onNewCollection || (() => {})} 
+                        onEditCollection={onEditCollection}
+                        onDeleteCollection={onDeleteCollection}
+                    />
+                </div>
+                
                 <div className="px-3 pt-3 pb-1">
                     <p className="text-[11px] font-semibold text-notion-muted opacity-60">WORKSPACE</p>
                 </div>

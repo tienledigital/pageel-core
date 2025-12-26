@@ -15,6 +15,7 @@ import PostDetailView from './PostDetailView';
 import PostUploadValidationModal from './PostUploadValidationModal';
 import PostImageSelectionModal from './PostImageSelectionModal';
 import { ConfirmationModal } from './ConfirmationModal';
+import { useCollectionStore } from '../features/collections/store';
 
 interface PostListProps {
   gitService: IGitService;
@@ -148,10 +149,21 @@ const PostList: React.FC<PostListProps> = ({
   const [postToUpdateImage, setPostToUpdateImage] = useState<PostData | null>(null);
 
   // Columns Configuration
-  const [visibleFields, setVisibleFields] = useState<string[]>(['author', 'category', 'date']);
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const { getActiveCollection } = useCollectionStore();
+  const activeCollection = getActiveCollection();
+  const [visibleFields, setVisibleFields] = useState<string[]>([]);
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({ '__name__': 35 });
 
   useEffect(() => {
+    // 1. Prioritize active collection settings
+    if (activeCollection) {
+        // Use collection's tableColumns (or empty array if not set)
+        setVisibleFields(activeCollection.tableColumns || []);
+        setColumnWidths(activeCollection.columnWidths || { '__name__': 35 });
+        return; // Skip fallback if collection exists
+    }
+
+    // 2. Fallback to repo-wide settings in localStorage (legacy support)
     const columnsKey = `postTableColumns_${repo.full_name}`;
     const widthsKey = `postTableColumnWidths_${repo.full_name}`;
     
@@ -162,18 +174,21 @@ const PostList: React.FC<PostListProps> = ({
          try {
              setVisibleFields(JSON.parse(savedColumnsStr));
          } catch {
-             // Keep defaults
+             setVisibleFields([]);
          }
+    } else {
+        // No saved columns, use empty by default
+        setVisibleFields([]);
     }
 
     if (savedWidthsStr) {
         try {
             setColumnWidths(JSON.parse(savedWidthsStr));
         } catch {
-            setColumnWidths({});
+            setColumnWidths({ '__name__': 35 });
         }
     }
-  }, [repo.full_name]);
+  }, [repo.full_name, activeCollection?.id, activeCollection?.tableColumns, activeCollection?.columnWidths]);
 
   const fetchPosts = async () => {
     if (!path) {

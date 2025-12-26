@@ -11,13 +11,25 @@ interface CreatePostWrapperProps {
     gitService: IGitService;
     repo: GithubRepo;
     settings: any;
+    postsPath: string;
+    imagesPath: string;
+    collectionId?: string;
     onComplete: () => void;
     onAction: () => void;
 }
 
 type Mode = 'library' | 'post-wizard';
 
-const CreatePostWrapper: React.FC<CreatePostWrapperProps> = ({ gitService, repo, settings, onComplete, onAction }) => {
+const CreatePostWrapper: React.FC<CreatePostWrapperProps> = ({ 
+    gitService, 
+    repo, 
+    settings, 
+    postsPath,
+    imagesPath,
+    collectionId,
+    onComplete, 
+    onAction 
+}) => {
     const { t } = useI18n();
     const [mode, setMode] = useState<Mode>('library');
 
@@ -89,8 +101,9 @@ const CreatePostWrapper: React.FC<CreatePostWrapperProps> = ({ gitService, repo,
                 <PostWorkflow 
                     gitService={gitService}
                     repo={repo}
-                    postsPath={settings.postsPath}
-                    imagesPath={settings.imagesPath}
+                    postsPath={postsPath}
+                    imagesPath={imagesPath}
+                    collectionId={collectionId}
                     imageFileTypes={settings.imageFileTypes}
                     newPostCommitTemplate={settings.newPostCommit}
                     newImageCommitTemplate={settings.newImageCommit}

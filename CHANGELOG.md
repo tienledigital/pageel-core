@@ -9,23 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Multi-Collection Support** (MC-01 to MC-05)
+  - Create multiple collections within a single workspace
+  - Independent paths per collection (posts, images)
+  - Custom template per collection
+  - Quick collection switching via CollectionPicker
+  - Edit/Delete collections with modal UI
+- New components: `CollectionPicker`, `NewCollectionModal`, `EditCollectionModal`
+- `sync.ts` for persisting collections to `.pageelrc.json`
+- Collection-aware `PostWorkflow` for template validation
+
 ### Changed
 
 - **BREAKING:** Renamed config file `.acmrc.json` → `.pageelrc.json`
 - Refactored to feature-based folder structure (`src/features/`)
 - Dashboard now uses shared `SETTINGS_SCHEMA` and `DEFAULT_SETTINGS`
+- Auth storage: `sessionStorage` → `localStorage` (cross-tab persistence)
+- `PostList` now uses per-collection table columns
+- `TemplateGenerator` now saves/loads from collection store
 
-### Added
+### Fixed
 
-- Zustand v5.0.9 for global state management
-- `useSettingsStore` for settings state with localStorage persistence
-- `useAppStore` for navigation and UI state
-- `useAuthStore` for authentication state
-- `useCollectionStore` for multi-collection management
-- `Collection`, `Workspace`, `WorkspaceSettings` interfaces
-- `IAuthProvider` interface for extensibility (database/OAuth auth)
-- `ISettingsProvider` interface for swappable settings storage
-- `useNavigation` hook for view routing with browser history
+- White screen after login (missing `useCollectionStore` import)
+- New browser tab requiring re-login
+- Template columns not syncing with PostList table
+- Stale state in Dashboard save handlers
 
 ---
 

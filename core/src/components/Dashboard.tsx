@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GithubUser, GithubRepo, IGitService, ServiceType, AppSettings, ProjectType } from '../types';
-import { SETTINGS_SCHEMA, DEFAULT_SETTINGS, useNavigation, ViewType, useAppStore, useSettingsStore } from '../features';
+import { SETTINGS_SCHEMA, DEFAULT_SETTINGS, useNavigation, ViewType, useAppStore, useSettingsStore, useCollectionStore, loadCollectionsFromPageelrc, saveCollectionsToPageelrc, Collection } from '../features';
 import PostList from './PostList';
 import CreatePostWrapper from './CreatePostWrapper';
 import ImageList from './ImageList';
@@ -23,6 +22,8 @@ import { SetupWizard } from './SetupWizard';
 import { SettingsView } from './SettingsView';
 import { SyncStatusBadge } from './SyncStatusBadge';
 import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
+import { NewCollectionModal } from './NewCollectionModal';
+import { EditCollectionModal } from './EditCollectionModal';
 
 // --- MAIN DASHBOARD ---
 interface DashboardProps {
@@ -38,10 +39,25 @@ const Dashboard: React.FC<DashboardProps> = ({ gitService, repo, user, serviceTy
     // Use Zustand stores for global state
     const { activeView, setView, isSidebarOpen, setSidebarOpen, toggleSidebar, isScanning, setScanning, repoStats, setRepoStats } = useAppStore();
     const { settings, setSettings, isSaving, setIsSaving, saveSuccess, setSaveSuccess, isSetupComplete, setSetupComplete } = useSettingsStore();
+    const { initWorkspace, workspace, addCollection, getActiveCollection, updateSettings: updateWorkspaceSettings } = useCollectionStore();
 
+    const [isNewCollectionModalOpen, setIsNewCollectionModalOpen] = useState(false);
+    const [isEditCollectionModalOpen, setIsEditCollectionModalOpen] = useState(false);
+    const [collectionToEdit, setCollectionToEdit] = useState<Collection | null>(null);
     const [isPickerOpen, setIsPickerOpen] = useState<'posts' | 'images' | null>(null);
+    const [collectionPathPicker, setCollectionPathPicker] = useState<{type: 'posts' | 'images', callback: (path: string) => void} | null>(null);
     const importFileInputRef = useRef<HTMLInputElement>(null);
     const [importExportStatus, setImportExportStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+    // Auto-clear success message
+    useEffect(() => {
+        if (successMessage) {
+            const timer = setTimeout(() => setSuccessMessage(null), 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [successMessage]);
+
 
     const [suggestedPostPaths, setSuggestedPostPaths] = useState<string[]>([]);
     const [suggestedImagePaths, setSuggestedImagePaths] = useState<string[]>([]);
@@ -52,22 +68,29 @@ const Dashboard: React.FC<DashboardProps> = ({ gitService, repo, user, serviceTy
     const [isSynced, setIsSynced] = useState(true);
     // URL sync is now handled by useAppStore
 
+    // Get active collection - use its paths, fallback to global settings
+    const activeCollection = getActiveCollection();
+    const effectivePostsPath = activeCollection?.postsPath || settings.postsPath;
+    const effectiveImagesPath = activeCollection?.imagesPath || settings.imagesPath;
+
     const fetchStats = useCallback(async () => {
         setRepoStats({ postCount: null, imageCount: null });
-        if (!gitService) return;
+        if (!gitService || !effectivePostsPath) return;
         try {
-            const postContents = await gitService.getRepoContents(settings.postsPath);
+            const postContents = await gitService.getRepoContents(effectivePostsPath);
             const postCount = postContents.filter(item => item.type === 'file' && (item.name.endsWith('.md') || item.name.endsWith('.mdx'))).length;
 
             let imageCount = 0;
             try {
-                const imageContents = await gitService.getRepoContents(settings.imagesPath);
-                imageCount = imageContents.filter(item => item.type === 'file').length;
+                if (effectiveImagesPath) {
+                    const imageContents = await gitService.getRepoContents(effectiveImagesPath);
+                    imageCount = imageContents.filter(item => item.type === 'file').length;
+                }
             } catch { imageCount = 0; }
 
             setRepoStats({ postCount, imageCount });
         } catch { setRepoStats({ postCount: 0, imageCount: 0 }); }
-    }, [gitService, settings.postsPath, settings.imagesPath]);
+    }, [gitService, effectivePostsPath, effectiveImagesPath]);
 
     // Sync Polling Logic
     const handleAction = useCallback(() => {
@@ -97,6 +120,23 @@ const Dashboard: React.FC<DashboardProps> = ({ gitService, repo, user, serviceTy
 
     useEffect(() => {
         const loadSettingsAndScan = async () => {
+            // Initialize collection workspace for this repo
+            initWorkspace(repo.full_name);
+            
+            // Only load from .pageelrc.json if workspace has no collections yet (first load)
+            // This prevents duplicates when workspace is already populated from localStorage
+            const currentWorkspace = useCollectionStore.getState().workspace;
+            if (!currentWorkspace?.collections?.length) {
+                const collectionsData = await loadCollectionsFromPageelrc(gitService, repo.full_name);
+                if (collectionsData && collectionsData.collections.length > 0) {
+                    // Add collections from .pageelrc.json
+                    collectionsData.collections.forEach(c => addCollection(c));
+                    if (collectionsData.settings) {
+                        updateWorkspaceSettings(collectionsData.settings);
+                    }
+                }
+            }
+            
             setScanning(true);
             const projectTypeKey = `projectType_${repo.full_name}`;
             const postsPathKey = `postsPath_${repo.full_name}`;
@@ -461,6 +501,41 @@ const Dashboard: React.FC<DashboardProps> = ({ gitService, repo, user, serviceTy
         }
     };
 
+    const handleCollectionCreated = async () => {
+        const latestWorkspace = useCollectionStore.getState().workspace;
+        if (latestWorkspace) {
+            await saveCollectionsToPageelrc(gitService, latestWorkspace);
+            setSuccessMessage(t('dashboard.success.collectionCreated'));
+            setIsNewCollectionModalOpen(false);
+        }
+    };
+
+    const handleEditCollection = (collection: Collection) => {
+        setCollectionToEdit(collection);
+        setIsEditCollectionModalOpen(true);
+    };
+
+    const handleCollectionUpdated = async () => {
+        const latestWorkspace = useCollectionStore.getState().workspace;
+        if (latestWorkspace) {
+            await saveCollectionsToPageelrc(gitService, latestWorkspace);
+            setSuccessMessage(t('dashboard.success.collectionUpdated'));
+            setIsEditCollectionModalOpen(false);
+        }
+    };
+
+    const handleDeleteCollection = async () => {
+        const latestWorkspace = useCollectionStore.getState().workspace;
+        if (latestWorkspace) {
+            await saveCollectionsToPageelrc(gitService, latestWorkspace);
+            setSuccessMessage(t('dashboard.success.collectionDeleted'));
+        }
+    };
+
+    const handleSelectPath = (type: 'posts' | 'images', callback: (path: string) => void) => {
+        setCollectionPathPicker({ type, callback });
+    };
+
     const navLinks = [
         { id: 'dashboard', label: t('dashboard.nav.manage'), icon: DatabaseIcon },
         { id: 'images', label: t('dashboard.nav.manageImages'), icon: ImageIcon },
@@ -528,8 +603,8 @@ const Dashboard: React.FC<DashboardProps> = ({ gitService, repo, user, serviceTy
                     <PostList
                         gitService={gitService}
                         repo={currentRepo}
-                        path={settings.postsPath}
-                        imagesPath={settings.imagesPath}
+                        path={effectivePostsPath}
+                        imagesPath={effectiveImagesPath}
                         domainUrl={settings.domainUrl}
                         projectType={settings.projectType}
                         onPostUpdate={fetchStats}
@@ -549,6 +624,9 @@ const Dashboard: React.FC<DashboardProps> = ({ gitService, repo, user, serviceTy
                         gitService={gitService}
                         repo={currentRepo}
                         settings={settings}
+                        postsPath={effectivePostsPath}
+                        imagesPath={effectiveImagesPath}
+                        collectionId={activeCollection?.id}
                         onComplete={() => {
                             setView('dashboard');
                         }}
@@ -559,7 +637,7 @@ const Dashboard: React.FC<DashboardProps> = ({ gitService, repo, user, serviceTy
                 <ImageList
                     gitService={gitService}
                     repo={currentRepo}
-                    path={settings.imagesPath}
+                    path={effectiveImagesPath}
                     imageFileTypes={settings.imageFileTypes}
                     domainUrl={settings.domainUrl}
                     projectType={settings.projectType}
@@ -571,8 +649,21 @@ const Dashboard: React.FC<DashboardProps> = ({ gitService, repo, user, serviceTy
                     onAction={handleAction}
                 />
             );
-            case 'template': return <TemplateGenerator gitService={gitService} repo={currentRepo} postsPath={settings.postsPath} />;
-            case 'backup': return <BackupManager gitService={gitService} repo={currentRepo} postsPath={settings.postsPath} imagesPath={settings.imagesPath} />;
+            case 'template': return (
+                <TemplateGenerator 
+                    gitService={gitService} 
+                    repo={currentRepo} 
+                    postsPath={effectivePostsPath} 
+                    collectionId={activeCollection?.id}
+                    onTemplateSaved={async () => {
+                        const latestWorkspace = useCollectionStore.getState().workspace;
+                        if (latestWorkspace) {
+                            await saveCollectionsToPageelrc(gitService, latestWorkspace);
+                        }
+                    }}
+                />
+            );
+            case 'backup': return <BackupManager gitService={gitService} repo={currentRepo} postsPath={effectivePostsPath} imagesPath={effectiveImagesPath} />;
             case 'settings': return (
                 <SettingsView
                     settings={settings}
@@ -620,6 +711,9 @@ const Dashboard: React.FC<DashboardProps> = ({ gitService, repo, user, serviceTy
                     isSynced={isSynced}
                     repoStats={repoStats}
                     lastUpdated={lastUpdated}
+                    onNewCollection={() => setIsNewCollectionModalOpen(true)}
+                    onEditCollection={handleEditCollection}
+                    onDeleteCollection={handleDeleteCollection}
                 />
             </div>
 
@@ -678,6 +772,44 @@ const Dashboard: React.FC<DashboardProps> = ({ gitService, repo, user, serviceTy
                     }}
                     initialPath={isPickerOpen === 'posts' ? settings.postsPath : settings.imagesPath}
                 />
+            )}
+
+            {/* New Collection Modal */}
+            <NewCollectionModal
+                isOpen={isNewCollectionModalOpen}
+                onClose={() => setIsNewCollectionModalOpen(false)}
+                onSelectPath={handleSelectPath}
+                onCreated={handleCollectionCreated}
+            />
+
+            {/* Edit Collection Modal */}
+            <EditCollectionModal
+                isOpen={isEditCollectionModalOpen}
+                onClose={() => setIsEditCollectionModalOpen(false)}
+                collection={collectionToEdit}
+                onSelectPath={handleSelectPath}
+                onUpdated={handleCollectionUpdated}
+            />
+
+            {/* Collection Path Picker */}
+            {collectionPathPicker && (
+                <DirectoryPicker
+                    gitService={gitService}
+                    repo={repo}
+                    onClose={() => setCollectionPathPicker(null)}
+                    onSelect={(path) => {
+                        collectionPathPicker.callback(path);
+                        setCollectionPathPicker(null);
+                    }}
+                    initialPath=""
+                />
+            )}
+
+            {/* Success Message Toast */}
+            {successMessage && (
+                <div className="fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded shadow-lg animate-fade-in z-50">
+                    {successMessage}
+                </div>
             )}
         </div>
     );

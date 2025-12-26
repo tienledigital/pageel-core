@@ -11,11 +11,16 @@ import { ArrowUturnLeftIcon } from './icons/ArrowUturnLeftIcon';
 import { SearchIcon } from './icons/SearchIcon';
 import { SpinnerIcon } from './icons/SpinnerIcon';
 import { DocumentIcon } from './icons/DocumentIcon';
+import { useCollectionStore, CollectionTemplate, TemplateField } from '../features/collections';
 
 interface TemplateGeneratorProps {
     gitService: IGitService;
     repo: GithubRepo;
     postsPath: string;
+    /** Optional collection ID for per-collection template */
+    collectionId?: string;
+    /** Callback when template is saved (for syncing to .pageelrc.json) */
+    onTemplateSaved?: () => void;
 }
 
 const defaultTemplate: Record<string, string> = {
@@ -37,7 +42,7 @@ const DEFAULT_WIDTHS: Record<string, number> = {
     'default': 15
 };
 
-const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ gitService, repo, postsPath }) => {
+const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ gitService, repo, postsPath, collectionId, onTemplateSaved }) => {
     const [currentTemplate, setCurrentTemplate] = useState<Record<string, string> | null>(null);
     const [parsedTemplate, setParsedTemplate] = useState<Record<string, string> | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -54,44 +59,78 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ gitService, repo,
     const [columnWidths, setColumnWidths] = useState<Record<string, number>>({ '__name__': 35 });
 
     const { t } = useI18n();
+    
+    // Collection store for per-collection templates
+    const { workspace, updateCollection } = useCollectionStore();
+    const activeCollection = collectionId 
+        ? workspace?.collections.find(c => c.id === collectionId) 
+        : null;
 
+    // Fallback keys for localStorage (repo-wide)
     const templateKey = `postTemplate_${repo.full_name}`;
     const columnsKey = `postTableColumns_${repo.full_name}`;
     const widthsKey = `postTableColumnWidths_${repo.full_name}`;
 
+    // Convert CollectionTemplate to Record<string, string> format
+    const collectionTemplateToRecord = (template: CollectionTemplate): Record<string, string> => {
+        const record: Record<string, string> = {};
+        template.fields.forEach(field => {
+            record[field.name] = field.type;
+        });
+        return record;
+    };
+
+    // Convert Record<string, string> to CollectionTemplate format
+    const recordToCollectionTemplate = (record: Record<string, string>): CollectionTemplate => {
+        return {
+            fields: Object.entries(record).map(([name, type]) => ({
+                name,
+                type: type as TemplateField['type'],
+            })),
+        };
+    };
+
     useEffect(() => {
-        const savedTemplate = localStorage.getItem(templateKey);
-        const savedColumns = localStorage.getItem(columnsKey);
-        const savedWidths = localStorage.getItem(widthsKey);
-
-        if (savedTemplate) {
-            try {
-                setCurrentTemplate(JSON.parse(savedTemplate));
-            } catch (e) {
-                console.error("Failed to parse template from localStorage", e);
-            }
+        // Load template from collection store if available, otherwise from localStorage
+        if (activeCollection?.template) {
+            setCurrentTemplate(collectionTemplateToRecord(activeCollection.template));
+            setSelectedColumns(activeCollection.tableColumns || []);
+            setColumnWidths(activeCollection.columnWidths || { '__name__': 35 });
         } else {
-            setCurrentTemplate(null);
-        }
+            // Fallback to localStorage
+            const savedTemplate = localStorage.getItem(templateKey);
+            const savedColumns = localStorage.getItem(columnsKey);
+            const savedWidths = localStorage.getItem(widthsKey);
 
-        if (savedColumns) {
-            try {
-                setSelectedColumns(JSON.parse(savedColumns));
-            } catch {
-                setSelectedColumns(['author', 'category', 'date']);
+            if (savedTemplate) {
+                try {
+                    setCurrentTemplate(JSON.parse(savedTemplate));
+                } catch (e) {
+                    console.error("Failed to parse template from localStorage", e);
+                }
+            } else {
+                setCurrentTemplate(null);
             }
-        } else {
-            setSelectedColumns(['author', 'category', 'date']);
-        }
 
-        if (savedWidths) {
-            try {
-                setColumnWidths(JSON.parse(savedWidths));
-            } catch {
-                setColumnWidths({ '__name__': 35 });
+            if (savedColumns) {
+                try {
+                    setSelectedColumns(JSON.parse(savedColumns));
+                } catch {
+                    setSelectedColumns([]);
+                }
+            } else {
+                setSelectedColumns([]);
+            }
+
+            if (savedWidths) {
+                try {
+                    setColumnWidths(JSON.parse(savedWidths));
+                } catch {
+                    setColumnWidths({ '__name__': 35 });
+                }
             }
         }
-    }, [templateKey, columnsKey, widthsKey]);
+    }, [collectionId, activeCollection?.template, templateKey, columnsKey, widthsKey]);
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -184,51 +223,60 @@ const TemplateGenerator: React.FC<TemplateGeneratorProps> = ({ gitService, repo,
         setIsSaving(true);
         setError(null);
         try {
-            // 1. Save to LocalStorage
-            localStorage.setItem(templateKey, JSON.stringify(templateToSave));
-            localStorage.setItem(columnsKey, JSON.stringify(selectedColumns));
-            localStorage.setItem(widthsKey, JSON.stringify(columnWidths));
+            // Save to collection store if collectionId provided
+            if (collectionId && activeCollection) {
+                const collectionTemplate = recordToCollectionTemplate(templateToSave);
+                updateCollection(collectionId, {
+                    template: collectionTemplate,
+                    tableColumns: selectedColumns,
+                    columnWidths: columnWidths,
+                });
+                // Notify parent to sync .pageelrc.json
+                onTemplateSaved?.();
+            } else {
+                // Fallback: Save to LocalStorage (repo-wide)
+                localStorage.setItem(templateKey, JSON.stringify(templateToSave));
+                localStorage.setItem(columnsKey, JSON.stringify(selectedColumns));
+                localStorage.setItem(widthsKey, JSON.stringify(columnWidths));
 
-            // 2. Update .pageelrc.json in the repo
-            try {
-                // Fetch current state of repo root to check for .pageelrc.json existence
-                const rootItems = await gitService.getRepoContents('');
-                const configItem = rootItems.find(item => item.name === '.pageelrc.json');
+                // Update .pageelrc.json in the repo
+                try {
+                    const rootItems = await gitService.getRepoContents('');
+                    const configItem = rootItems.find(item => item.name === '.pageelrc.json');
 
-                let config: any = { version: 1 };
+                    let config: any = { version: 1 };
 
-                if (configItem) {
-                    // File exists, read current content to preserve other settings
-                    const contentStr = await gitService.getFileContent('.pageelrc.json');
-                    try {
-                        config = JSON.parse(contentStr);
-                    } catch (e) {
-                        console.warn("Existing .pageelrc.json is invalid JSON, overwriting.");
+                    if (configItem) {
+                        const contentStr = await gitService.getFileContent('.pageelrc.json');
+                        try {
+                            config = JSON.parse(contentStr);
+                        } catch (e) {
+                            console.warn("Existing .pageelrc.json is invalid JSON, overwriting.");
+                        }
                     }
+
+                    config.templates = { ...config.templates, frontmatter: templateToSave };
+                    config.ui = { ...config.ui, tableColumns: selectedColumns, columnWidths: columnWidths };
+
+                    const newContent = JSON.stringify(config, null, 2);
+
+                    if (configItem) {
+                        await gitService.updateFileContent(
+                            '.pageelrc.json',
+                            newContent,
+                            'chore: update post template settings',
+                            configItem.sha
+                        );
+                    } else {
+                        await gitService.createFileFromString(
+                            '.pageelrc.json',
+                            newContent,
+                            'chore: create pageel-core config'
+                        );
+                    }
+                } catch (remoteError) {
+                    console.warn("Failed to update .pageelrc.json", remoteError);
                 }
-
-                // Update template and UI settings
-                config.templates = { ...config.templates, frontmatter: templateToSave };
-                config.ui = { ...config.ui, tableColumns: selectedColumns, columnWidths: columnWidths };
-
-                const newContent = JSON.stringify(config, null, 2);
-
-                if (configItem) {
-                    await gitService.updateFileContent(
-                        '.pageelrc.json',
-                        newContent,
-                        'chore: update post template settings',
-                        configItem.sha
-                    );
-                } else {
-                    await gitService.createFileFromString(
-                        '.pageelrc.json',
-                        newContent,
-                        'chore: create pageel-core config'
-                    );
-                }
-            } catch (remoteError) {
-                console.warn("Failed to update .pageelrc.json", remoteError);
             }
 
             setCurrentTemplate(templateToSave);

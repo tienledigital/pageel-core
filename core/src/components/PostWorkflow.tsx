@@ -1,5 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
+import { useCollectionStore } from '../features/collections/store';
+import { CollectionTemplate } from '../features/collections/types';
 import { IGitService, GithubRepo } from '../types';
 import { compressImage } from '../utils/image';
 import { parseMarkdown, updateFrontmatter, slugify, extractImageUrls, escapeRegExp } from '../utils/parsing';
@@ -30,6 +32,7 @@ interface PostWorkflowProps {
     onComplete: () => void;
     onCancel: () => void; // New prop for going back to library
     onAction: () => void;
+    collectionId?: string;
 }
 
 interface UploadedImage {
@@ -71,9 +74,12 @@ const PostWorkflow: React.FC<PostWorkflowProps> = ({
     projectType,
     onComplete,
     onCancel,
-    onAction
+    onAction,
+    collectionId
 }) => {
     const { t } = useI18n();
+    const { getActiveCollection } = useCollectionStore();
+    const activeCollection = getActiveCollection();
     const [step, setStep] = useState(1);
     
     // Step 1: Images
@@ -103,6 +109,17 @@ const PostWorkflow: React.FC<PostWorkflowProps> = ({
 
     // Load template on mount
     useEffect(() => {
+        // 1. Try to load from active collection
+        if (activeCollection && activeCollection.template) {
+            const templateMap: Record<string, string> = {};
+            activeCollection.template.fields.forEach(field => {
+                templateMap[field.name] = field.type;
+            });
+            setValidationTemplate(templateMap);
+            return;
+        }
+
+        // 2. Fallback to legacy global template
         const templateJson = localStorage.getItem(`postTemplate_${repo.full_name}`);
         if (templateJson) {
             try {
@@ -111,7 +128,7 @@ const PostWorkflow: React.FC<PostWorkflowProps> = ({
                 console.error("Failed to parse validation template", e);
             }
         }
-    }, [repo.full_name]);
+    }, [repo.full_name, activeCollection?.id, activeCollection?.template]);
 
     // --- Validation Logic ---
     const validateFrontmatter = (fm: Record<string, any>) => {
